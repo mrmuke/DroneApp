@@ -106,7 +106,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
 
-
+        var productConnectionState:Boolean=false;
         private val TAG = MainActivity::class.java.name
         const val FLAG_CONNECTION_CHANGE = "dji_sdk_connection_change"
         const val PRODUCT_CONNECTED="Product Connected"
@@ -159,12 +159,14 @@ class MainActivity : AppCompatActivity() {
                             Log.d(TAG, "onProductDisconnect")
                             showToast(PRODUCT_DISCONNECTED)
                             notifyStatusChange(PRODUCT_DISCONNECTED)
+                            productConnectionState=false;
                         }
 
                         override fun onProductConnect(baseProduct: BaseProduct) {
                             Log.d(TAG, String.format("onProductConnect newProduct:%s", baseProduct))
                             showToast(PRODUCT_CONNECTED)
                             notifyStatusChange(PRODUCT_CONNECTED)
+                            productConnectionState=true;
                         }
 
                         override fun onProductChanged(baseProduct:BaseProduct) {

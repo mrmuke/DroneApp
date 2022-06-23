@@ -17,9 +17,7 @@ public class Util {
     public static boolean isProductModuleAvaliable(){
         return getProductInstance()!=null;
     }
-    public static boolean isRTKAvaliable(){
-        return isProductModuleAvaliable() && isAircraft() && getAircraftInstance().getFlightController().getRTK()!=null;
-    }
+
     public static boolean isFlightControllerAvaliable(){
         return isProductModuleAvaliable()&&isAircraft()&&
                 null != Util.getAircraftInstance().getFlightController();

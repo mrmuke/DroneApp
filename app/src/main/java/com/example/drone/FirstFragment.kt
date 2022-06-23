@@ -13,6 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.navigation.fragment.findNavController
+import com.example.drone.MainActivity.Companion.productConnectionState
 import com.example.drone.databinding.FragmentFirstBinding
 
 /**
@@ -38,13 +39,15 @@ class FirstFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        binding.startRetrieval.isEnabled=false
-        binding.startRetrieval.isClickable=false
+        if(productConnectionState){
+            enableStartButton()
+        }
+        else{
+            disableStartButton()
+        }
         val receiver = object: BroadcastReceiver(){
             override fun onReceive(context: Context?, intent: Intent?) {
-                binding.startRetrieval.isEnabled=true;
-                binding.startRetrieval.isClickable=true;
-                binding.startRetrieval.backgroundTintList= ColorStateList.valueOf(Color.BLUE)
+                enableStartButton()
             }
         }
         activity?.registerReceiver(receiver, IntentFilter("Product Connected"))
@@ -53,7 +56,15 @@ class FirstFragment : Fragment() {
         }
 
     }
-
+    fun disableStartButton(){
+        binding.startRetrieval.isEnabled=false
+        binding.startRetrieval.isClickable=false
+    }
+    fun enableStartButton(){
+        binding.startRetrieval.isEnabled=true;
+        binding.startRetrieval.isClickable=true;
+        binding.startRetrieval.backgroundTintList= ColorStateList.valueOf(Color.BLUE)
+    }
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
