@@ -9,7 +9,7 @@
     <string name="previous">End</string>
 
     <string name="retry">Retry</string>
-    <string name="ultrasonic">Ultrasonic Altitude: N/A</string>
-
+    <string name="ultrasonic">Ultrasonic Distance: N/A</string>
+    <string name="barometric">Barometric Altitude: N/A</string>
     <string name="hello_first_fragment">Drone Retrieval</string>
 </resources>

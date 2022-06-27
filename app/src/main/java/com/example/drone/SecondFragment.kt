@@ -1,63 +1,176 @@
 package com.example.drone
 
 import android.content.BroadcastReceiver
-import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.SurfaceTexture
-import android.media.MediaFormat
+import android.hardware.usb.UsbDevice
 import android.os.Bundle
+import android.text.method.KeyListener
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.example.drone.databinding.FragmentSecondBinding
 import com.example.drone.utils.Util
+import com.serenegiant.usb.Size
 import dji.common.flightcontroller.FlightControllerState
-import dji.sdk.camera.VideoFeeder
-import java.util.logging.Logger
-import android.view.TextureView
-import androidx.constraintlayout.widget.ConstraintLayout
-import dji.common.product.Model
-import dji.sdk.codec.DJICodecManager
-import java.nio.ByteBuffer
+import com.serenegiant.usb.USBMonitor
+import com.serenegiant.usb.UVCCamera
+import dji.common.error.DJIError
+import dji.common.flightcontroller.IOStateOnBoard
+import dji.common.remotecontroller.ProfessionalRC
+import dji.common.util.CommonCallbacks
+import dji.keysdk.KeyManager
+import dji.keysdk.RemoteControllerKey
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * A simple [Fragment] subclass as the second destination in the navigation.
  */
 
-class SecondFragment : Fragment(), TextureView.SurfaceTextureListener {
+class SecondFragment : Fragment()/*, USBMonitor.OnDeviceConnectListener*/ {
 
     private var _binding: FragmentSecondBinding? = null
     private var ultrasonicFailed=false;
     // This property is only valid between onCreateView and
     // onDestroyView.
     private val binding get() = _binding!!
-    companion object{
-        val LOG: Logger = Logger.getLogger(SecondFragment::class.java.name)
-    }
-    //CAMERA
-    private var mCodecManager:DJICodecManager? =null;
-    private var receivedVideoDataListener: VideoFeeder.VideoDataListener?=null;
-    private var videostreamPreview:TextureView? = null
+/*
 
+    private var mUSBMonitor: USBMonitor? = null
+    private var currentCamera: UVCCamera? = null
+    private val cameraMutex = Mutex()
+    private var surface: Surface? = null
+
+
+    companion object {
+        const val TAG = "UvcCameraExample"
+        const val RTAG = "Remote Controller"
+    }
+    override fun onStart() {
+        super.onStart()
+        mUSBMonitor?.register()
+    }
+
+    override fun onStop() {
+        mUSBMonitor?.unregister()
+        releaseCameraAsync()
+        super.onStop()
+    }
+
+    /**
+     * Called when the camera is attached to the Android device
+     */
+    override fun onAttach(device: UsbDevice?) {
+        Log.i(TAG, "Device has been attached")
+        releaseCameraAsync()
+        // When the camera is attached, we need to ask the user for permission to access it.
+        mUSBMonitor?.requestPermission(device)
+    }
+    /**
+     * Called when the camera connects
+     *
+     * Initialize camera properties for the preview stream
+     */
+    override fun onConnect(
+        device: UsbDevice?,
+        controlBlock: USBMonitor.UsbControlBlock?,
+        createNew: Boolean
+    ) {
+
+        Log.i(TAG, "Device has been connected")
+
+        // Try to open the camera that was connected
+        val camera = UVCCamera()
+        try {
+            camera.open(controlBlock)
+        } catch (e: UnsupportedOperationException) {
+            Log.e(TAG, "Failed to open camera", e)
+            return
+        }
+        val textureView = view?.findViewById<TextureView>(R.id.video)
+        Log.d(TAG,textureView.toString())
+        // Specify a surface to display camera feed
+        if (textureView != null) {
+            surface = Surface(textureView.surfaceTexture)
+        }
+        camera.setPreviewDisplay(surface)
+
+
+        // This frame format is used for the thermal camera.
+        // To use a different camera type, the format may have to be changed.
+        camera.setPreviewSize(50,50, UVCCamera.FRAME_FORMAT_YUYV)
+
+        camera.startPreview()
+
+        // Store camera for later so it can be properly released
+        storeCameraAsync(camera)
+    }
+
+    /**
+     * Called when the camera connection is cancelled
+     */
+    override fun onCancel(device: UsbDevice?) {
+        Log.i(TAG, "Device connection has been cancelled")
+    }
+
+    /**
+     * Called when the camera disconnects
+     */
+    override fun onDisconnect(device: UsbDevice?, controlBlock: USBMonitor.UsbControlBlock?) {
+        Log.i(TAG, "Device has disconnected")
+        releaseCameraAsync()
+    }
+
+    /**
+     * Called when the camera is detached
+     */
+    override fun onDettach(device: UsbDevice?) {
+        Log.i(TAG, "Device has been detached")
+    }
+
+    /**
+     * Save the currently connected [camera].
+     */
+    private fun storeCameraAsync(camera: UVCCamera) = GlobalScope.async {
+        cameraMutex.withLock {
+            currentCamera = camera
+        }
+    }
+
+    /**
+     * Disconnect from the current camera.
+     */
+    private fun releaseCameraAsync() = GlobalScope.async {
+        cameraMutex.withLock {
+            currentCamera?.stopPreview()
+            currentCamera?.setStatusCallback(null)
+            currentCamera?.setButtonCallback(null)
+            currentCamera?.close()
+            currentCamera = null
+
+            surface?.release()
+            surface = null
+        }
+    }
+
+*/
     override fun onCreateView(
             inflater: LayoutInflater, container: ViewGroup?,
             savedInstanceState: Bundle?
     ): View? {
 
         _binding = FragmentSecondBinding.inflate(inflater, container, false)
-        initUI(binding.root)
 
 
         return binding.root
 
-    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -70,7 +183,36 @@ class SecondFragment : Fragment(), TextureView.SurfaceTextureListener {
             }
         }
         activity?.registerReceiver(receiver, IntentFilter("Product Disconnected"))
-        initPreview()
+        //mUSBMonitor = USBMonitor(context, this)
+
+
+        //Extended IO Port testing
+        Util.getAircraftInstance().flightController.setPowerSupplyPortEnabled(true, object:CommonCallbacks.CompletionCallback<DJIError> {
+            override fun onResult(p0: DJIError) {
+                Log.d(RTAG,p0.toString())
+            }
+        })
+        Util.getAircraftInstance().flightController.initOnBoardIO(0,IOStateOnBoard.Builder.createInitialParams(1),object:CommonCallbacks.CompletionCallback<DJIError> {
+            override fun onResult(p0: DJIError) {
+                Log.d(RTAG,p0.toString())
+            }
+        })
+        Util.getAircraftInstance().flightController.setOnBoardIO(0,IOStateOnBoard9,object:CommonCallbacks.CompletionCallback<DJIError> {
+            override fun onResult(p0: DJIError) {
+                Log.d(RTAG,p0.toString())
+            }
+        })
+        //method 1
+        //Util.getAircraftInstance().remoteController.customizeButton(ProfessionalRC.CustomizableButton.C1,ProfessionalRC.ButtonAction)
+        //method 2
+        val keyC1:RemoteControllerKey = RemoteControllerKey.create(RemoteControllerKey.CUSTOM_BUTTON_1)
+        KeyManager.getInstance().addListener(keyC1,object:dji.keysdk.callback.KeyListener{
+            override fun onValueChange(p0: Any?, p1: Any?) {
+                Log.d(RTAG,"Old Value" + p0.toString())
+                Log.d(RTAG,"New Value: "+p1.toString())
+                Log.d(RTAG,"Pressed")
+            }
+        })
 
 
         tryGetUltrasonic(view)
@@ -78,7 +220,6 @@ class SecondFragment : Fragment(), TextureView.SurfaceTextureListener {
         binding.retry.setOnClickListener{
             if(ultrasonicFailed){
                 tryGetUltrasonic(view)
-                initPreview()
             }
         }
 
@@ -90,48 +231,6 @@ class SecondFragment : Fragment(), TextureView.SurfaceTextureListener {
 
     }
 
-    fun initUI(view:View){
-        videostreamPreview= view?.findViewById(R.id.video)
-        LOG.warning(videostreamPreview.toString())
-        if(videostreamPreview!=null){
-            LOG.warning("set surface texture listener ui")
-            videostreamPreview!!.surfaceTextureListener=this
-            receivedVideoDataListener =object: VideoFeeder.VideoDataListener {
-                override fun onReceive(videoBuffer: ByteArray?, size: Int) {
-                    Log.d("msg","new frame")
-                    LOG.warning(videoBuffer.toString())
-                    mCodecManager?.sendDataToDecoder(
-                        videoBuffer,
-                        size
-                    )
-                }
-
-
-
-            }
-        }
-    }
-
-    fun initPreview(){
-        if (!Util.getProductInstance().model.equals(Model.UNKNOWN_AIRCRAFT)) {
-            receivedVideoDataListener?.let {
-                LOG.warning("Added listener..")
-                VideoFeeder.getInstance().primaryVideoFeed.addVideoDataListener(
-                    it
-                )
-            }
-
-        }
-
-
-    }
-    fun uninitPreview() {
-        LOG.warning("uninit")
-        if(Util.getProductInstance().camera!=null){
-            VideoFeeder.getInstance().primaryVideoFeed.removeVideoDataListener(receivedVideoDataListener)
-        }
-    }
-
     fun tryGetUltrasonic(view:View){
         if(Util.isFlightControllerAvaliable()
         ){
@@ -139,80 +238,30 @@ class SecondFragment : Fragment(), TextureView.SurfaceTextureListener {
 
             Util.getAircraftInstance().flightController.setStateCallback(object: FlightControllerState.Callback{
                 override fun onUpdate(flightControllerState:FlightControllerState){
-                    val alt = flightControllerState.ultrasonicHeightInMeters;
-                    val update= "Ultrasonic Altitude: %.2f".format(alt);
+                    val distance = flightControllerState.ultrasonicHeightInMeters;
+                    val barometricAltitude=flightControllerState.aircraftLocation.altitude
+                    val ultrasonicUpdate= "Ultrasonic Distance: %.2f".format(distance);
                     val ultrasonicTextView = view.findViewById<TextView>(R.id.textview_ultrasonic)
+                    val barometricUpdate= "Barometric Altitude: %.2f".format(barometricAltitude);
+                    val barometricTextView = view.findViewById<TextView>(R.id.textview_barometric)
+                    //get distance between each using barometric
+                    //set package 0 value for altitude at beginning of adventure and subtract
                     activity?.runOnUiThread(Runnable {
-                        ultrasonicTextView.text=update;
+                        ultrasonicTextView.text=ultrasonicUpdate;
+                        barometricTextView.text=barometricUpdate
                     })
+
 
                    ;
                 }
-            })}else{
+            })
+            Util.getAircraftInstance().flightController
+
+        }else{
             val myToast = Toast.makeText(context, "Flight Controller Unavailable..", Toast.LENGTH_SHORT);
             myToast.show();
             ultrasonicFailed=true;
         }
-    }
-
-
-    override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-        if(mCodecManager==null){
-            mCodecManager= DJICodecManager(context,surface,width,height)
-//            mCodecManager!!.enabledYuvData(true)
-//            mCodecManager!!.yuvDataCallback = object:DJICodecManager.YuvDataCallback{
-//                override fun onYuvDataReceived(
-//                    mediaFormat: MediaFormat?,
-//                    byteBuffer: ByteBuffer?,
-//                    i: Int,
-//                    i1: Int,
-//                    i2: Int
-//                ) {
-//                    Log.d("msg","new yuv frame")
-//                    LOG.warning("Got new yuv frame "+i+" "+i1+" "+i2)
-//                }
-//            }
-        }
-    }
-
-    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-        Log.e(TAG,"onSurfaceTextureSizeChanged")
-    }
-
-    override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-        Log.e(TAG,"onSurfaceTextureDestroyed")
-        LOG.warning("surface texture destroyed")
-
-        if(mCodecManager!=null){
-            mCodecManager!!.cleanSurface()
-            mCodecManager=null
-        }
-        return false
-    }
-
-    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-    }
-
-    override fun onResume() {
-        super.onResume()
-        initPreview()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        uninitPreview()
-    }
-    override fun onDestroyView() {
-        LOG.warning("view destroyed")
-        if(mCodecManager!=null){
-            mCodecManager!!.cleanSurface()
-            mCodecManager!!.destroyCodec()
-            mCodecManager=null
-        }
-        uninitPreview()
-
-        super.onDestroyView()
-        _binding = null
     }
 
 }
