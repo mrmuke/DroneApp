@@ -82,11 +82,5 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-process:2.3.1'
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.3.1"
 
-    implementation project(path:':libuvccamera')
-    implementation("com.serenegiant:common:2.12.4") {
-        exclude module: 'support-v4'
-    }
-
-    implementation "org.openpnp:opencv:4.5.1-2"
 
 }

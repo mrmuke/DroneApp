@@ -50,6 +50,7 @@ class FirstFragment : Fragment() {
                 enableStartButton()
             }
         }
+
         activity?.registerReceiver(receiver, IntentFilter("Product Connected"))
         binding.startRetrieval.setOnClickListener {
             findNavController().navigate(R.id.action_FirstFragment_to_SecondFragment)

@@ -4,9 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.hardware.usb.UsbDevice
+import android.graphics.Color
 import android.os.Bundle
-import android.text.method.KeyListener
 import android.util.Log
 import android.view.*
 import android.widget.TextView
@@ -15,16 +14,16 @@ import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.example.drone.databinding.FragmentSecondBinding
 import com.example.drone.utils.Util
-import com.serenegiant.usb.Size
 import dji.common.flightcontroller.FlightControllerState
-import com.serenegiant.usb.USBMonitor
-import com.serenegiant.usb.UVCCamera
 import dji.common.error.DJIError
+import dji.common.flightcontroller.GPIOWorkModeOnBoard
 import dji.common.flightcontroller.IOStateOnBoard
+import dji.common.remotecontroller.HardwareState
 import dji.common.remotecontroller.ProfessionalRC
 import dji.common.util.CommonCallbacks
 import dji.keysdk.KeyManager
 import dji.keysdk.RemoteControllerKey
+import dji.midware.data.model.P3.DataOnBoardSdkSetIOState
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
@@ -35,132 +34,16 @@ import kotlinx.coroutines.sync.withLock
  */
 
 class SecondFragment : Fragment()/*, USBMonitor.OnDeviceConnectListener*/ {
-
+    private val PTAG="POWER PORT"
     private var _binding: FragmentSecondBinding? = null
-    private var ultrasonicFailed=false;
+    private var sensorsFailed=false;
+
+    private var p5Status=true;
+    private var p4Status=true;
+
     // This property is only valid between onCreateView and
     // onDestroyView.
     private val binding get() = _binding!!
-/*
-
-    private var mUSBMonitor: USBMonitor? = null
-    private var currentCamera: UVCCamera? = null
-    private val cameraMutex = Mutex()
-    private var surface: Surface? = null
-
-
-    companion object {
-        const val TAG = "UvcCameraExample"
-        const val RTAG = "Remote Controller"
-    }
-    override fun onStart() {
-        super.onStart()
-        mUSBMonitor?.register()
-    }
-
-    override fun onStop() {
-        mUSBMonitor?.unregister()
-        releaseCameraAsync()
-        super.onStop()
-    }
-
-    /**
-     * Called when the camera is attached to the Android device
-     */
-    override fun onAttach(device: UsbDevice?) {
-        Log.i(TAG, "Device has been attached")
-        releaseCameraAsync()
-        // When the camera is attached, we need to ask the user for permission to access it.
-        mUSBMonitor?.requestPermission(device)
-    }
-    /**
-     * Called when the camera connects
-     *
-     * Initialize camera properties for the preview stream
-     */
-    override fun onConnect(
-        device: UsbDevice?,
-        controlBlock: USBMonitor.UsbControlBlock?,
-        createNew: Boolean
-    ) {
-
-        Log.i(TAG, "Device has been connected")
-
-        // Try to open the camera that was connected
-        val camera = UVCCamera()
-        try {
-            camera.open(controlBlock)
-        } catch (e: UnsupportedOperationException) {
-            Log.e(TAG, "Failed to open camera", e)
-            return
-        }
-        val textureView = view?.findViewById<TextureView>(R.id.video)
-        Log.d(TAG,textureView.toString())
-        // Specify a surface to display camera feed
-        if (textureView != null) {
-            surface = Surface(textureView.surfaceTexture)
-        }
-        camera.setPreviewDisplay(surface)
-
-
-        // This frame format is used for the thermal camera.
-        // To use a different camera type, the format may have to be changed.
-        camera.setPreviewSize(50,50, UVCCamera.FRAME_FORMAT_YUYV)
-
-        camera.startPreview()
-
-        // Store camera for later so it can be properly released
-        storeCameraAsync(camera)
-    }
-
-    /**
-     * Called when the camera connection is cancelled
-     */
-    override fun onCancel(device: UsbDevice?) {
-        Log.i(TAG, "Device connection has been cancelled")
-    }
-
-    /**
-     * Called when the camera disconnects
-     */
-    override fun onDisconnect(device: UsbDevice?, controlBlock: USBMonitor.UsbControlBlock?) {
-        Log.i(TAG, "Device has disconnected")
-        releaseCameraAsync()
-    }
-
-    /**
-     * Called when the camera is detached
-     */
-    override fun onDettach(device: UsbDevice?) {
-        Log.i(TAG, "Device has been detached")
-    }
-
-    /**
-     * Save the currently connected [camera].
-     */
-    private fun storeCameraAsync(camera: UVCCamera) = GlobalScope.async {
-        cameraMutex.withLock {
-            currentCamera = camera
-        }
-    }
-
-    /**
-     * Disconnect from the current camera.
-     */
-    private fun releaseCameraAsync() = GlobalScope.async {
-        cameraMutex.withLock {
-            currentCamera?.stopPreview()
-            currentCamera?.setStatusCallback(null)
-            currentCamera?.setButtonCallback(null)
-            currentCamera?.close()
-            currentCamera = null
-
-            surface?.release()
-            surface = null
-        }
-    }
-
-*/
     override fun onCreateView(
             inflater: LayoutInflater, container: ViewGroup?,
             savedInstanceState: Bundle?
@@ -170,7 +53,7 @@ class SecondFragment : Fragment()/*, USBMonitor.OnDeviceConnectListener*/ {
 
 
         return binding.root
-
+    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -183,42 +66,106 @@ class SecondFragment : Fragment()/*, USBMonitor.OnDeviceConnectListener*/ {
             }
         }
         activity?.registerReceiver(receiver, IntentFilter("Product Disconnected"))
-        //mUSBMonitor = USBMonitor(context, this)
 
 
         //Extended IO Port testing
         Util.getAircraftInstance().flightController.setPowerSupplyPortEnabled(true, object:CommonCallbacks.CompletionCallback<DJIError> {
-            override fun onResult(p0: DJIError) {
-                Log.d(RTAG,p0.toString())
+            override fun onResult(p0: DJIError?) {
+                Log.d(PTAG,p0.toString())
             }
         })
-        Util.getAircraftInstance().flightController.initOnBoardIO(0,IOStateOnBoard.Builder.createInitialParams(1),object:CommonCallbacks.CompletionCallback<DJIError> {
-            override fun onResult(p0: DJIError) {
-                Log.d(RTAG,p0.toString())
+
+
+        Util.getAircraftInstance().flightController.initOnBoardIO(4,IOStateOnBoard.Builder.createInitialParams(GPIOWorkModeOnBoard.PUSH_PULL_OUTPUT),object:CommonCallbacks.CompletionCallback<DJIError> {
+            override fun onResult(p0: DJIError?) {
+                Log.d(PTAG,p0.toString())
             }
         })
-        Util.getAircraftInstance().flightController.setOnBoardIO(0,IOStateOnBoard9,object:CommonCallbacks.CompletionCallback<DJIError> {
-            override fun onResult(p0: DJIError) {
-                Log.d(RTAG,p0.toString())
+        /*Util.getAircraftInstance().flightController.getOnBoardIO(4,object:CommonCallbacks.CompletionCallbackWith<IOStateOnBoard> {
+            override fun onSuccess(p0: IOStateOnBoard?) {
+                if (p0 != null) {
+                    IOStateOnBoard.Builder.createReturnValue(true,DataOnBoardSdkSetIOState.GPIOMode.PushPullOutput,true)
+                    val turnedOn = p0.gpioWorkModeOnBoard.value()
+                    Log.d(PTAG,turnedOn.toString())
+
+                }
+            }
+
+            override fun onFailure(p0: DJIError?) {
+                Log.d(PTAG,p0.toString())
+            }
+        })*/
+        Util.getAircraftInstance().flightController.initOnBoardIO(3,IOStateOnBoard.Builder.createInitialParams(GPIOWorkModeOnBoard.PUSH_PULL_OUTPUT),object:CommonCallbacks.CompletionCallback<DJIError> {
+            override fun onResult(p0: DJIError?) {
+                Log.d(PTAG,p0.toString())
             }
         })
-        //method 1
-        //Util.getAircraftInstance().remoteController.customizeButton(ProfessionalRC.CustomizableButton.C1,ProfessionalRC.ButtonAction)
-        //method 2
-        val keyC1:RemoteControllerKey = RemoteControllerKey.create(RemoteControllerKey.CUSTOM_BUTTON_1)
-        KeyManager.getInstance().addListener(keyC1,object:dji.keysdk.callback.KeyListener{
-            override fun onValueChange(p0: Any?, p1: Any?) {
-                Log.d(RTAG,"Old Value" + p0.toString())
-                Log.d(RTAG,"New Value: "+p1.toString())
-                Log.d(RTAG,"Pressed")
+        Util.getAircraftInstance().remoteController.setHardwareStateCallback (object:HardwareState.HardwareStateCallback{
+            override fun onUpdate(p0: HardwareState) {
+                p0.c1Button?.let {it->
+                    if(it.isClicked){
+                        p5Status=!p5Status;
+                        if(p5Status){
+                            activity?.runOnUiThread(Runnable {
+                                val controlLED = view.findViewById<TextView>(R.id.control_led)
+                                controlLED.setBackgroundResource(R.color.purple_200)
+                            })
+                            Util.getAircraftInstance().flightController.setOnBoardIO(4,IOStateOnBoard.Builder.createSetParams(true),object:CommonCallbacks.CompletionCallback<DJIError> {
+                                override fun onResult(p0: DJIError?) {
+                                    Log.d(PTAG,p0.toString())
+                                }
+                            })
+                        }else{
+                            activity?.runOnUiThread(Runnable {
+                                val controlLED = view.findViewById<TextView>(R.id.control_led)
+                                controlLED.setBackgroundResource(R.color.white)
+                            })
+                            Util.getAircraftInstance().flightController.setOnBoardIO(4,IOStateOnBoard.Builder.createSetParams(false),object:CommonCallbacks.CompletionCallback<DJIError> {
+                                override fun onResult(p0: DJIError?) {
+                                    Log.d(PTAG,p0.toString())
+                                }
+                            })
+                        }
+                    }
+
+                }
+                /*p0.c2Button?.let {it->
+                    if(it.isClicked){
+                        p4Status=!p4Status;
+                        if(p4Status){
+                            activity?.runOnUiThread(Runnable {
+                                val pp4 = view.findViewById<TextView>(R.id.pp4)
+                                pp4.setBackgroundResource(R.color.purple_200)
+                            })
+                            Util.getAircraftInstance().flightController.setOnBoardIO(3,IOStateOnBoard.Builder.createSetParams(true),object:CommonCallbacks.CompletionCallback<DJIError> {
+                                override fun onResult(p0: DJIError?) {
+                                    Log.d(PTAG,p0.toString())
+                                }
+                            })
+                        }else{
+                            activity?.runOnUiThread(Runnable {
+                                val pp4 = view.findViewById<TextView>(R.id.pp4)
+                                pp4.setBackgroundResource(R.color.white)
+                            })
+                            binding.pp4.setBackgroundResource(R.color.white)
+                            Util.getAircraftInstance().flightController.setOnBoardIO(3,IOStateOnBoard.Builder.createSetParams(false),object:CommonCallbacks.CompletionCallback<DJIError> {
+                                override fun onResult(p0: DJIError?) {
+                                    Log.d(PTAG,p0.toString())
+                                }
+                            })
+                        }
+                    }}*/
+
             }
+
         })
+
 
 
         tryGetUltrasonic(view)
 
         binding.retry.setOnClickListener{
-            if(ultrasonicFailed){
+            if(sensorsFailed){
                 tryGetUltrasonic(view)
             }
         }
@@ -234,7 +181,7 @@ class SecondFragment : Fragment()/*, USBMonitor.OnDeviceConnectListener*/ {
     fun tryGetUltrasonic(view:View){
         if(Util.isFlightControllerAvaliable()
         ){
-            ultrasonicFailed=false
+            sensorsFailed=false
 
             Util.getAircraftInstance().flightController.setStateCallback(object: FlightControllerState.Callback{
                 override fun onUpdate(flightControllerState:FlightControllerState){
@@ -242,7 +189,7 @@ class SecondFragment : Fragment()/*, USBMonitor.OnDeviceConnectListener*/ {
                     val barometricAltitude=flightControllerState.aircraftLocation.altitude
                     val ultrasonicUpdate= "Ultrasonic Distance: %.2f".format(distance);
                     val ultrasonicTextView = view.findViewById<TextView>(R.id.textview_ultrasonic)
-                    val barometricUpdate= "Barometric Altitude: %.2f".format(barometricAltitude);
+                    val barometricUpdate= "Pressure Altitude: %.2f (Test ultrasonic accuracy first -> use pressure to get relative altitude..)".format(barometricAltitude);
                     val barometricTextView = view.findViewById<TextView>(R.id.textview_barometric)
                     //get distance between each using barometric
                     //set package 0 value for altitude at beginning of adventure and subtract
@@ -260,7 +207,7 @@ class SecondFragment : Fragment()/*, USBMonitor.OnDeviceConnectListener*/ {
         }else{
             val myToast = Toast.makeText(context, "Flight Controller Unavailable..", Toast.LENGTH_SHORT);
             myToast.show();
-            ultrasonicFailed=true;
+            sensorsFailed=true;
         }
     }
 
